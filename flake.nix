@@ -71,10 +71,49 @@
         }
       );
 
+      # Taken from https://discourse.nixos.org/t/how-to-provide-alsa-pc-to-environment/54670/5
+      packages = forAllSystems (
+        { pkgs }: {
+          default =
+            let
+              rustPlatform = pkgs.makeRustPlatform {
+                cargo = pkgs.rust-bin.stable.latest.minimal;
+                rustc = pkgs.rust-bin.stable.latest.minimal;
+              };
+            in
+            rustPlatform.buildRustPackage rec {
+              name = "samolss-gui";
+              src = self;
+              nativeBuildInputs = with pkgs; [ pkg-config ];
+              buildInputs = with pkgs; [
+                alsa-lib.dev
+                udev.dev
+                xorg.libX11
+                xorg.libXrandr
+                xorg.libXcursor
+                xorg.libxcb
+                xorg.libXi
+                wayland
+                libxkbcommon
+                libxkbcommon.dev
+                vulkan-loader
+                vulkan-tools
+                glfw
+              ];
+              cargoLock = {
+                lockFile = ./Cargo.lock;
+                outputHashes = "";
+              };
+              LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath buildInputs;
+            };
+        }
+      );
+
       devShells = forAllSystems (
         { pkgs }: {
           default = pkgs.mkShell {
             packages = [
+              pkgs.alsa-lib
               (pkgs.rustToolchain.override {
                 extensions = [
                   "rust-src"
