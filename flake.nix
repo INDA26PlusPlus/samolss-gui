@@ -100,9 +100,33 @@
                 vulkan-tools
                 glfw
               ];
+              runtimeLibs = with pkgs; [
+                udev.dev
+                xorg.libX11
+                xorg.libXrandr
+                xorg.libXcursor
+                xorg.libxcb
+                xorg.libXi
+                wayland
+                libxkbcommon
+                libxkbcommon.dev
+                vulkan-loader
+                vulkan-tools
+              ];
+              postFixup = ''
+                patchelf --add-rpath ${pkgs.lib.makeLibraryPath runtimeLibs} $out/bin/*
+                mkdir $out/bin/resources
+                cp -r assets $out/bin/resources/assets
+              '';
+              # postInstall = ''
+              #   mkdir $out/bin/resources
+              #   cp -r assets $out/bin/resources/assets
+              # '';
               cargoLock = {
                 lockFile = ./Cargo.lock;
-                outputHashes = "";
+                outputHashes = {
+                  "chess_library-0.1.0" = "sha256-Lc0EcuMdojTjOJrwkFkDkxEy8+yy1Cx+mMx/5yLVlm4=";
+                };
               };
               LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath buildInputs;
             };
@@ -114,6 +138,17 @@
           default = pkgs.mkShell {
             packages = [
               pkgs.alsa-lib
+              pkgs.udev.dev
+              pkgs.libX11
+              pkgs.libXrandr
+              pkgs.libXcursor
+              pkgs.libxcb
+              pkgs.libXi
+              pkgs.wayland
+              pkgs.libxkbcommon
+              pkgs.libxkbcommon.dev
+              pkgs.vulkan-loader
+              pkgs.vulkan-tools
               (pkgs.rustToolchain.override {
                 extensions = [
                   "rust-src"
