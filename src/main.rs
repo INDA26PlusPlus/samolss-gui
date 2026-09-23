@@ -17,6 +17,7 @@ struct MainState {
     board: Board,
     piece_assets: [graphics::Image; 12],
     clicked_piece: Option<usize>,
+    legal_moves: [u64; 64],
 }
 
 impl MainState {
@@ -53,10 +54,13 @@ impl MainState {
             graphics::Image::from_path(ctx, "/assets/b_Queen.png").expect("Fuck image not found"),
         ];
 
+        let legal_moves = chess_library::Board::get_all_legal_moves(&board);
+
         Ok(MainState {
             board,
             piece_assets,
             clicked_piece: None,
+            legal_moves,
         })
     }
 }
@@ -78,6 +82,7 @@ impl event::EventHandler for MainState {
             self.board,
             &self.piece_assets,
             &self.clicked_piece,
+            self.legal_moves,
         );
         canvas.finish(ctx)?;
 
@@ -100,12 +105,37 @@ impl event::EventHandler for MainState {
         }
 
         let square_y = (y as u32 - BOARD_Y) / 100;
-        println!("{}", square_y);
         if square_y > 7 {
             return Ok(());
         }
-        self.clicked_piece = usize::try_from(square_x + square_y * 8).ok();
-        println!("{:?}", self.clicked_piece);
+
+        let square_index = square_x as usize + square_y as usize * 8;
+
+        if !self.clicked_piece.is_some() {
+            let piece_type =
+                chess_library::Board::piece_type_on_position(&self.board, square_index);
+            if piece_type == -1 {
+                return Ok(());
+            }
+        }
+
+        if self.clicked_piece.is_some()
+            && (self.legal_moves[self.clicked_piece.expect("???")] >> square_index & 1 == 1)
+        {
+            let valid_move = chess_library::Board::move_piece(
+                &mut self.board,
+                self.clicked_piece.expect("???"),
+                square_index as u64,
+                None,
+            );
+            if valid_move {
+                self.legal_moves = chess_library::Board::get_all_legal_moves(&self.board);
+            }
+            self.clicked_piece = None;
+            return Ok(());
+        }
+
+        self.clicked_piece = Some(square_index);
         return Ok(());
     }
 }
@@ -124,6 +154,7 @@ fn draw_board(
     board: Board,
     piece_assets: &[graphics::Image; 12],
     clicked_square: &Option<usize>,
+    legal_moves: [u64; 64],
 ) {
     for i in 0..64 {
         let bounds = graphics::Rect {
@@ -135,6 +166,10 @@ fn draw_board(
 
         let color = if clicked_square == &Some(i) {
             Color::GREEN
+        } else if clicked_square.is_some()
+            && legal_moves[clicked_square.expect("???")] >> i & 1 == 1
+        {
+            Color::RED
         } else if i % 2 == (i / 8 % 2) {
             Color::WHITE
         } else {
