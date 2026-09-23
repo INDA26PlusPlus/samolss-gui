@@ -4,7 +4,7 @@
 # https://github.com/numtide/treefmt-nix
 {
 
-  # description = "Simple flake";
+  description = "Simple flake";
 
   inputs = {
     nixpkgs.url = "github:Nixos/nixpkgs/nixpkgs-unstable";
@@ -125,7 +125,7 @@
               cargoLock = {
                 lockFile = ./Cargo.lock;
                 outputHashes = {
-                  "chess_library-0.1.0" = "sha256-Lc0EcuMdojTjOJrwkFkDkxEy8+yy1Cx+mMx/5yLVlm4=";
+                  "chess_library-0.1.0" = "sha256-gfU18ORgC3ONH6x8+fF4VOyYfNaNEyRmh6GutNboGoI=";
                 };
               };
               LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath buildInputs;

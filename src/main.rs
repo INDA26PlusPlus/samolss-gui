@@ -190,6 +190,13 @@ impl event::EventHandler for MainState {
                 self.legal_moves = chess_library::Board::get_all_legal_moves(&self.board);
             }
             self.clicked_piece = None;
+
+            let is_mate_white = chess_library::Board::is_mate_white(&self.board);
+            self.black_win = is_mate_white;
+
+            let is_mate_black = chess_library::Board::is_mate_black(&self.board);
+            self.white_win = is_mate_black;
+
             return Ok(());
         }
 

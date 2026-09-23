@@ -4,5 +4,5 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-chess_library = { git = "https://github.com/fdABB-Gym-Samuel/elbjorck-chess.git" }
+chess_library = { git = "https://github.com/INDA26PlusPlus/elbjorck-chess.git" }
 ggez = "0.10.0"
