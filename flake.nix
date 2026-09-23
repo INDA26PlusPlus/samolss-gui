@@ -4,7 +4,7 @@
 # https://github.com/numtide/treefmt-nix
 {
 
-  description = "Simple flake";
+  # description = "Simple flake";
 
   inputs = {
     nixpkgs.url = "github:Nixos/nixpkgs/nixpkgs-unstable";
@@ -137,18 +137,6 @@
         { pkgs }: {
           default = pkgs.mkShell {
             packages = [
-              pkgs.alsa-lib
-              pkgs.udev.dev
-              pkgs.libX11
-              pkgs.libXrandr
-              pkgs.libXcursor
-              pkgs.libxcb
-              pkgs.libXi
-              pkgs.wayland
-              pkgs.libxkbcommon
-              pkgs.libxkbcommon.dev
-              pkgs.vulkan-loader
-              pkgs.vulkan-tools
               (pkgs.rustToolchain.override {
                 extensions = [
                   "rust-src"

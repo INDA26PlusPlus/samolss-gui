@@ -7,17 +7,20 @@ use ggez::{
     graphics::{self, Color, DrawParam},
     winit::event::MouseButton,
 };
-
-const BOARD_X: u32 = 100;
-const BOARD_Y: u32 = 100;
-const SQUARE_W: u32 = 100;
-const SQUARE_H: u32 = 100;
+use std::cmp;
 
 struct MainState {
+    square_side: u32,
+    board_x: u32,
+    board_y: u32,
+
     board: Board,
     piece_assets: [graphics::Image; 12],
     clicked_piece: Option<usize>,
     legal_moves: [u64; 64],
+    white_win: bool,
+    black_win: bool,
+    draw: bool,
 }
 
 impl MainState {
@@ -57,12 +60,62 @@ impl MainState {
         let legal_moves = chess_library::Board::get_all_legal_moves(&board);
 
         Ok(MainState {
+            square_side: 0,
+            board_x: 0,
+            board_y: 0,
             board,
             piece_assets,
             clicked_piece: None,
             legal_moves,
+            white_win: false,
+            black_win: false,
+            draw: false,
         })
     }
+    fn draw_board(&mut self, ctx: &mut Context, canvas: &mut graphics::Canvas) {
+        let screen = canvas.screen_coordinates().expect("No screen?");
+        let smallest_side = cmp::min(screen.w as u32, screen.h as u32);
+        self.square_side = smallest_side / 10;
+        self.board_x = (screen.w as u32 - 8 * self.square_side) / 2;
+        self.board_y = (screen.h as u32 - 8 * self.square_side) / 2;
+
+        for i in 0..64 {
+            let bounds = graphics::Rect {
+                x: (self.board_x as usize + self.square_side as usize * (i % 8)) as f32,
+                y: (self.board_y + self.square_side * (i as u32 / 8)) as f32,
+                w: self.square_side as f32,
+                h: self.square_side as f32,
+            };
+
+            let color = if self.clicked_piece == Some(i) {
+                Color::GREEN
+            } else if self.clicked_piece.is_some()
+                && self.legal_moves[self.clicked_piece.expect("???")] >> i & 1 == 1
+            {
+                Color::RED
+            } else if i % 2 == (i / 8 % 2) {
+                Color::WHITE
+            } else {
+                Color::BLUE
+            };
+
+            let square =
+                graphics::Mesh::new_rectangle(ctx, graphics::DrawMode::fill(), bounds, color)
+                    .expect("FFFFFFFUUUUUCKKKK");
+
+            canvas.draw(&square, Vec2::new(0 as f32, 0 as f32));
+
+            let piece_type = chess_library::Board::piece_type_on_position(&self.board, i);
+            if piece_type >= 0 {
+                let x = (self.board_x + self.square_side * (i as u32 % 8)) as f32;
+                let y = (self.board_y + self.square_side * (i as u32 / 8)) as f32;
+                let draw_params = DrawParam::new().dest(vec2(x, y)).scale(vec2(0.9, 0.9));
+                canvas.draw(&self.piece_assets[piece_type as usize], draw_params);
+            }
+        }
+    }
+
+    fn draw_hud(&mut self, ctx: &mut Context, canvas: &mut graphics::Canvas) {}
 }
 
 impl event::EventHandler for MainState {
@@ -74,16 +127,10 @@ impl event::EventHandler for MainState {
         let mut canvas =
             graphics::Canvas::from_frame(ctx, graphics::Color::from([0.1, 0.2, 0.3, 1.0]));
 
-        // canvas.draw(&self.circle, Vec2::new(self.pos_x, 380.0));
+        let screen = canvas.screen_coordinates().expect("No screeen!");
 
-        draw_board(
-            ctx,
-            &mut canvas,
-            self.board,
-            &self.piece_assets,
-            &self.clicked_piece,
-            self.legal_moves,
-        );
+        self.draw_board(ctx, &mut canvas);
+        // draw_hud(ctx, &mut canvas, self.white_win, self.black_win, self.draw);
         canvas.finish(ctx)?;
 
         Ok(())
@@ -99,12 +146,12 @@ impl event::EventHandler for MainState {
             return Ok(());
         }
 
-        let square_x = (x as u32 - BOARD_X) / 100;
+        let square_x = (x as u32 - self.board_x) / self.square_side;
         if square_x > 7 {
             return Ok(());
         }
 
-        let square_y = (y as u32 - BOARD_Y) / 100;
+        let square_y = (y as u32 - self.board_y) / self.square_side;
         if square_y > 7 {
             return Ok(());
         }
@@ -117,11 +164,16 @@ impl event::EventHandler for MainState {
             if piece_type == -1 {
                 return Ok(());
             }
+
+            // Piece clicked this time (square_index) doesnt match turn
+            if piece_type > 5 && self.board.white_turn {
+                return Ok(());
+            } else if !self.board.white_turn && piece_type < 6 {
+                return Ok(());
+            }
         }
 
-        if self.clicked_piece.is_some()
-            && (self.legal_moves[self.clicked_piece.expect("???")] >> square_index & 1 == 1)
-        {
+        if self.clicked_piece.is_some() {
             let valid_move = chess_library::Board::move_piece(
                 &mut self.board,
                 self.clicked_piece.expect("???"),
@@ -146,47 +198,4 @@ pub fn main() -> GameResult {
     ctx.fs.print_all();
     let state = MainState::new(&mut ctx)?;
     event::run(ctx, event_loop, state)
-}
-
-fn draw_board(
-    ctx: &mut Context,
-    canvas: &mut graphics::Canvas,
-    board: Board,
-    piece_assets: &[graphics::Image; 12],
-    clicked_square: &Option<usize>,
-    legal_moves: [u64; 64],
-) {
-    for i in 0..64 {
-        let bounds = graphics::Rect {
-            x: (BOARD_X as usize + SQUARE_W as usize * (i % 8)) as f32,
-            y: (BOARD_Y + SQUARE_H * (i as u32 / 8)) as f32,
-            w: SQUARE_W as f32,
-            h: SQUARE_H as f32,
-        };
-
-        let color = if clicked_square == &Some(i) {
-            Color::GREEN
-        } else if clicked_square.is_some()
-            && legal_moves[clicked_square.expect("???")] >> i & 1 == 1
-        {
-            Color::RED
-        } else if i % 2 == (i / 8 % 2) {
-            Color::WHITE
-        } else {
-            Color::BLUE
-        };
-
-        let square = graphics::Mesh::new_rectangle(ctx, graphics::DrawMode::fill(), bounds, color)
-            .expect("FFFFFFFUUUUUCKKKK");
-
-        canvas.draw(&square, Vec2::new(0 as f32, 0 as f32));
-
-        let piece_type = chess_library::Board::piece_type_on_position(&board, i);
-        if piece_type >= 0 {
-            let x = (BOARD_X + SQUARE_W * (i as u32 % 8)) as f32;
-            let y = (BOARD_Y + SQUARE_H * (i as u32 / 8)) as f32;
-            let draw_params = DrawParam::new().dest(vec2(x, y)).scale(vec2(0.9, 0.9));
-            canvas.draw(&piece_assets[piece_type as usize], draw_params);
-        }
-    }
 }
