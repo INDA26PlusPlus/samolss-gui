@@ -9,6 +9,8 @@ use ggez::{
 };
 use std::cmp;
 
+const ASSET_SIDE: f32 = 128.0;
+
 struct MainState {
     square_side: u32,
     board_x: u32,
@@ -79,6 +81,8 @@ impl MainState {
         self.board_x = (screen.w as u32 - 8 * self.square_side) / 2;
         self.board_y = (screen.h as u32 - 8 * self.square_side) / 2;
 
+        let scalar = self.square_side as f32 / ASSET_SIDE;
+
         for i in 0..64 {
             let bounds = graphics::Rect {
                 x: (self.board_x as usize + self.square_side as usize * (i % 8)) as f32,
@@ -109,7 +113,9 @@ impl MainState {
             if piece_type >= 0 {
                 let x = (self.board_x + self.square_side * (i as u32 % 8)) as f32;
                 let y = (self.board_y + self.square_side * (i as u32 / 8)) as f32;
-                let draw_params = DrawParam::new().dest(vec2(x, y)).scale(vec2(0.9, 0.9));
+                let draw_params = DrawParam::new()
+                    .dest(vec2(x, y))
+                    .scale(vec2(scalar, scalar));
                 canvas.draw(&self.piece_assets[piece_type as usize], draw_params);
             }
         }
