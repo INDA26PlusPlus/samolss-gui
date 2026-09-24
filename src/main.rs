@@ -13,6 +13,19 @@ const ASSET_SIDE: f32 = 128.0;
 const POPUP_W: f32 = 400.0;
 const POPUP_H: f32 = 400.0;
 
+const BLACK_SQUARE_COLOR: graphics::Color = graphics::Color {
+    r: 115.0 / 255.0,
+    g: 149.0 / 255.0,
+    b: 82.0 / 255.0,
+    a: 1.0,
+};
+
+const WHITE_SQUARE_COLOR: graphics::Color = graphics::Color {
+    r: 235.0 / 255.0,
+    g: 236.0 / 255.0,
+    b: 208.0 / 255.0,
+    a: 1.0,
+};
 struct MainState {
     square_side: u32,
     board_x: u32,
@@ -20,6 +33,7 @@ struct MainState {
 
     board: Board,
     promoting: bool,
+    promoting_square: usize,
     piece_assets: [graphics::Image; 12],
     clicked_piece: Option<usize>,
     legal_moves: [u64; 64],
@@ -76,6 +90,7 @@ impl MainState {
             black_win: false,
             draw: false,
             promoting: false,
+            promoting_square: 64,
         })
     }
     fn draw_board(&mut self, ctx: &mut Context, canvas: &mut graphics::Canvas) {
@@ -102,9 +117,9 @@ impl MainState {
             {
                 Color::RED
             } else if i % 2 == (i / 8 % 2) {
-                Color::WHITE
+                WHITE_SQUARE_COLOR
             } else {
-                Color::BLUE
+                BLACK_SQUARE_COLOR
             };
 
             let square =
@@ -156,9 +171,45 @@ impl MainState {
                     (screen.h - POPUP_H) / 2.0,
                 )),
             )
-        }
+        } else if self.promoting {
+            let bounds = graphics::Rect {
+                x: (screen.w - POPUP_W) / 2.0,
+                y: (screen.h - POPUP_H) / 2.0,
+                w: POPUP_W,
+                h: POPUP_H,
+            };
 
-        // else if
+            let color = Color::MAGENTA;
+
+            let promotable_asset = if self.board.white_turn {
+                [5, 1, 2, 3]
+            } else {
+                [11, 7, 8, 9]
+            };
+
+            // let promotable_type if self.board.white_turn {
+            //     [chess_library::Board::W_QUEENS]
+            // }v
+
+            let popup =
+                graphics::Mesh::new_rectangle(ctx, graphics::DrawMode::fill(), bounds, color)
+                    .expect("Fuck");
+
+            canvas.draw(&popup, Vec2::new(0 as f32, 0 as f32));
+
+            for i in 0..4 {
+                let x =
+                    ((screen.w - POPUP_W) as u32 / 2 + POPUP_W as u32 / 2 * (i as u32 % 2)) as f32;
+                let y =
+                    ((screen.h - POPUP_H) as u32 / 2 + POPUP_H as u32 / 2 * (i as u32 / 2)) as f32;
+                let scalar = (POPUP_H / 2.0) / ASSET_SIDE;
+                let draw_params = DrawParam::new()
+                    .dest(vec2(x, y))
+                    .scale(vec2(scalar, scalar));
+
+                canvas.draw(&self.piece_assets[promotable_asset[i]], draw_params);
+            }
+        }
     }
 }
 
@@ -190,6 +241,45 @@ impl event::EventHandler for MainState {
             return Ok(());
         }
 
+        if self.promoting {
+            let screen = _ctx.gfx.drawable_size();
+            let popup_x = (screen.0 - POPUP_W) / 2.0;
+            let popup_y = (screen.1 - POPUP_H) / 2.0;
+            let promotable_asset = if self.board.white_turn {
+                [5, 1, 2, 3]
+            } else {
+                [11, 7, 8, 9]
+            };
+
+            let piece_index_clicked = ((x as u32 - popup_x as u32) / (POPUP_W as u32 / 2)
+                + 2 * ((y as u32 - popup_y as u32) / (POPUP_H as u32 / 2)))
+                as usize;
+
+            if self.clicked_piece.is_some() {
+                let valid_move = chess_library::Board::move_piece(
+                    &mut self.board,
+                    self.clicked_piece.expect("???"),
+                    self.promoting_square as u64,
+                    Some(promotable_asset[piece_index_clicked] as usize),
+                );
+                if valid_move {
+                    self.legal_moves = chess_library::Board::get_all_legal_moves(&self.board);
+                }
+                self.clicked_piece = None;
+                self.promoting = false;
+                self.promoting_square = 64;
+
+                let is_mate_white = chess_library::Board::is_mate_white(&self.board);
+                self.black_win = is_mate_white;
+
+                let is_mate_black = chess_library::Board::is_mate_black(&self.board);
+                self.white_win = is_mate_black;
+
+                println!("white mate: {is_mate_white}");
+                println!("black mate: {is_mate_black}");
+                return Ok(());
+            }
+        }
         let square_x = (x as u32 - self.board_x) / self.square_side;
         if square_x > 7 {
             return Ok(());
@@ -226,6 +316,7 @@ impl event::EventHandler for MainState {
                 // New square on last or first rank
                 if square_index <= 7 || square_index >= 56 {
                     self.promoting = true;
+                    self.promoting_square = square_index;
                     return Ok(());
                 }
             }
