@@ -10,6 +10,8 @@ use ggez::{
 use std::cmp;
 
 const ASSET_SIDE: f32 = 128.0;
+const POPUP_W: f32 = 400.0;
+const POPUP_H: f32 = 400.0;
 
 struct MainState {
     square_side: u32,
@@ -17,6 +19,7 @@ struct MainState {
     board_y: u32,
 
     board: Board,
+    promoting: bool,
     piece_assets: [graphics::Image; 12],
     clicked_piece: Option<usize>,
     legal_moves: [u64; 64],
@@ -72,6 +75,7 @@ impl MainState {
             white_win: false,
             black_win: false,
             draw: false,
+            promoting: false,
         })
     }
     fn draw_board(&mut self, ctx: &mut Context, canvas: &mut graphics::Canvas) {
@@ -121,7 +125,41 @@ impl MainState {
         }
     }
 
-    fn draw_hud(&mut self, ctx: &mut Context, canvas: &mut graphics::Canvas) {}
+    fn draw_hud(&mut self, ctx: &mut Context, canvas: &mut graphics::Canvas) {
+        let screen = canvas.screen_coordinates().expect("No screen?");
+        if self.white_win || self.black_win || self.draw {
+            let bounds = graphics::Rect {
+                x: (screen.w - POPUP_W) / 2.0,
+                y: (screen.h - POPUP_H) / 2.0,
+                w: POPUP_W,
+                h: POPUP_H,
+            };
+
+            let color = Color::MAGENTA;
+            let finish_text = if self.white_win {
+                graphics::Text::new("White won!")
+            } else if self.black_win {
+                graphics::Text::new("Black won!")
+            } else {
+                graphics::Text::new("Draw")
+            };
+
+            let popup =
+                graphics::Mesh::new_rectangle(ctx, graphics::DrawMode::fill(), bounds, color)
+                    .expect("Fuck");
+
+            canvas.draw(&popup, Vec2::new(0 as f32, 0 as f32));
+            canvas.draw(
+                &finish_text,
+                DrawParam::new().dest(Vec2::new(
+                    (screen.w - POPUP_W) / 2.0,
+                    (screen.h - POPUP_H) / 2.0,
+                )),
+            )
+        }
+
+        // else if
+    }
 }
 
 impl event::EventHandler for MainState {
@@ -136,7 +174,7 @@ impl event::EventHandler for MainState {
         let screen = canvas.screen_coordinates().expect("No screeen!");
 
         self.draw_board(ctx, &mut canvas);
-        // draw_hud(ctx, &mut canvas, self.white_win, self.black_win, self.draw);
+        self.draw_hud(ctx, &mut canvas);
         canvas.finish(ctx)?;
 
         Ok(())
@@ -180,6 +218,18 @@ impl event::EventHandler for MainState {
         }
 
         if self.clicked_piece.is_some() {
+            let piece_type = chess_library::Board::piece_type_on_position(
+                &self.board,
+                self.clicked_piece.expect("???"),
+            );
+            if piece_type == 0 || piece_type == 6 {
+                // New square on last or first rank
+                if square_index <= 7 || square_index >= 56 {
+                    self.promoting = true;
+                    return Ok(());
+                }
+            }
+
             let valid_move = chess_library::Board::move_piece(
                 &mut self.board,
                 self.clicked_piece.expect("???"),
@@ -197,6 +247,8 @@ impl event::EventHandler for MainState {
             let is_mate_black = chess_library::Board::is_mate_black(&self.board);
             self.white_win = is_mate_black;
 
+            println!("white mate: {is_mate_white}");
+            println!("black mate: {is_mate_black}");
             return Ok(());
         }
 
