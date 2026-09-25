@@ -275,8 +275,6 @@ impl event::EventHandler for MainState {
                 let is_mate_black = chess_library::Board::is_mate_black(&self.board);
                 self.white_win = is_mate_black;
 
-                println!("white mate: {is_mate_white}");
-                println!("black mate: {is_mate_black}");
                 return Ok(());
             }
         }
