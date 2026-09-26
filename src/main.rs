@@ -15,6 +15,8 @@ use std::fmt;
 use std::net::TcpListener;
 use std::net::TcpStream;
 
+use crate::network::read_is_white;
+
 #[derive(Debug)]
 struct ParsedArgs {
     connect_to: Option<String>,
@@ -50,14 +52,25 @@ fn parse_args() -> ParsedArgs {
 
 fn main() -> GameResult {
     let args = parse_args();
+    let mut player_is_white = false;
+    if args.connect_to.is_none() {
+        player_is_white = if args.is_white.is_none() {
+            rand::random_bool(0.5)
+        } else {
+            args.is_white.expect("???")
+        }
+    }
+    let (mut writer, mut reader) =
+        network::create_stream(&args.connect_to, &args.accept_only, player_is_white);
 
-    let mut stream = network::create_stream(args.connect_to, &args.accept_only, args.is_white);
-
-    println!("Peer addr: {:?}", stream.peer_addr());
+    if args.connect_to.is_some() {
+        player_is_white = read_is_white(&mut reader);
+    }
+    println!("is white: {player_is_white}");
 
     let cb = ggez::ContextBuilder::new("chess", "elbjork-samolss");
     let (mut ctx, event_loop) = cb.build()?;
     ctx.fs.print_all();
-    let state = gui::MainState::new(&mut ctx)?;
+    let state = gui::MainState::new(&mut ctx, player_is_white, writer, reader)?;
     event::run(ctx, event_loop, state)
 }
