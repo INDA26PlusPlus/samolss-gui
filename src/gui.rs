@@ -120,8 +120,12 @@ impl MainState {
 
         for i in 0..64 {
             let bounds = graphics::Rect {
-                x: (self.board_x as usize + self.square_side as usize * (i % 8)) as f32,
-                y: (self.board_y + self.square_side * (i as u32 / 8)) as f32,
+                x: (self.board_x as usize + self.square_side as usize * (7 - i % 8)) as f32,
+                y: if self.player_is_white {
+                    (self.board_y + self.square_side * (7 - i as u32 / 8)) as f32
+                } else {
+                    (self.board_y + self.square_side * (i as u32 / 8)) as f32
+                },
                 w: self.square_side as f32,
                 h: self.square_side as f32,
             };
@@ -146,8 +150,12 @@ impl MainState {
 
             let piece_type = chess_library::Board::piece_type_on_position(&self.board, i);
             if piece_type >= 0 {
-                let x = (self.board_x + self.square_side * (i as u32 % 8)) as f32;
-                let y = (self.board_y + self.square_side * (i as u32 / 8)) as f32;
+                let x = (self.board_x + self.square_side * (7 - i as u32 % 8)) as f32;
+                let y = if self.player_is_white {
+                    (self.board_y + self.square_side * (7 - i as u32 / 8)) as f32
+                } else {
+                    (self.board_y + self.square_side * (i as u32 / 8)) as f32
+                };
                 let draw_params = DrawParam::new()
                     .dest(vec2(x, y))
                     .scale(vec2(scalar, scalar));
@@ -343,7 +351,7 @@ impl event::EventHandler for MainState {
                 [11, 7, 8, 9]
             };
 
-            let piece_index_clicked = ((x as u32 - popup_x as u32) / (POPUP_W as u32 / 2)
+            let piece_index_clicked = (7 - (x as u32 - popup_x as u32) / (POPUP_W as u32 / 2)
                 + 2 * ((y as u32 - popup_y as u32) / (POPUP_H as u32 / 2)))
                 as usize;
 
@@ -371,12 +379,16 @@ impl event::EventHandler for MainState {
             }
         }
 
-        let square_x = (x as u32 - self.board_x) / self.square_side;
+        let square_x = 7 - (x as u32 - self.board_x) / self.square_side;
         if square_x > 7 {
             return Ok(());
         }
 
-        let square_y = (y as u32 - self.board_y) / self.square_side;
+        let square_y = if self.player_is_white {
+            7 - (y as u32 - self.board_y) / self.square_side
+        } else {
+            (y as u32 - self.board_y) / self.square_side
+        };
         if square_y > 7 {
             return Ok(());
         }
