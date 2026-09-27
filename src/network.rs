@@ -75,59 +75,26 @@ pub fn send_move(
     };
 
     let board_state = board_to_board_state(board);
-    //
-    // let mut board_state: String = "".to_string();
-    // for i in 0..64 {
-    //     // This becomes a bit unintuitive since the board state should go a8 -> h8 -> a7 -> ... -> h1
-    //     let piece_type = Board::piece_type_on_position(board, (56 + i % 8 - i / 8));
-    //
-    //     if piece_type < 0 {
-    //         board_state += " ";
-    //     }
-    //
-    //     match piece_type as usize {
-    //         Board::W_KINGS => board_state += "K",
-    //         Board::W_QUEENS => board_state += "Q",
-    //         Board::W_ROOKS => board_state += "R",
-    //         Board::W_BISHOPS => board_state += "B",
-    //         Board::W_KNIGHTS => board_state += "N",
-    //         Board::W_PAWNS => board_state += "P",
-    //         Board::B_KINGS => board_state += "k",
-    //         Board::B_QUEENS => board_state += "q",
-    //         Board::B_ROOKS => board_state += "r",
-    //         Board::B_BISHOPS => board_state += "b",
-    //         Board::B_KNIGHTS => board_state += "n",
-    //         Board::B_PAWNS => board_state += "p",
-    //         _ => board_state += " ",
-    //     };
-    // }
 
     let msg = format!("{alg_start}{alg_stop}{promotion_string}{board_state}\n");
     send_msg(stream, msg.as_bytes());
 }
 
-pub fn read_msg(stream: &mut BufReader<TcpStream>) -> Vec<u8> {
-    let mut msg: Vec<u8> = Vec::new();
-    loop {
-        match stream.read_until(b'\n', &mut msg) {
-            Ok(_) => break,
-            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => continue,
-            Err(_) => panic!("Failed to read or some shii"),
-        };
-    }
-    //  match stream
-    //     .read_until(b'\n', &mut msg)
-    //     .expect("Failed to read msg"); {
-    //     Ok(_) => if msg.ends_with(b"\n") => return msg,
-    //     Ok(_) =>
-    //
-    // }
-    return msg;
+pub fn read_msg(stream: &mut BufReader<TcpStream>, buffer: &mut Vec<u8>) -> io::Result<bool> {
+    match stream.read_until(b'\n', buffer) {
+        Ok(_) if buffer.ends_with(b"\n") => return Ok(true),
+        Ok(_) => return Ok(false),
+        Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => return Ok(false),
+        Err(e) => return Err(e),
+    };
 }
 
 pub fn read_is_white(stream: &mut BufReader<TcpStream>) -> bool {
-    let msg = read_msg(stream);
-
+    let mut msg: Vec<u8> = Vec::new();
+    while !read_msg(stream, &mut msg).expect("Something went wrong") {
+        println!("{msg:?}");
+    }
+    println!("{msg:?}");
     match msg[0] {
         b'W' => true,
         b'B' => false,
@@ -135,9 +102,20 @@ pub fn read_is_white(stream: &mut BufReader<TcpStream>) -> bool {
     }
 }
 
-pub fn read_move(stream: &mut BufReader<TcpStream>) -> (u64, u64, String, String) {
-    let msg = String::from_utf8(read_msg(stream)).expect("Read bad string");
-    println!("received msg: {msg}");
+pub fn read_move(
+    stream: &mut BufReader<TcpStream>,
+    buffer: &mut Vec<u8>,
+    message: &mut (u64, u64, String, String),
+) -> io::Result<(bool)> {
+    if !read_msg(stream, buffer)? {
+        return Ok(false);
+    };
+
+    println!("buffer = {buffer:?}");
+    let mut msg =
+        String::from_utf8(std::mem::take(buffer)).expect("Failed to parse buffer as utf8");
+
+    println!("received move: {msg}");
 
     let move_coords = &msg[0..4];
     let promotion_piece = msg[4..5].to_string();
@@ -146,7 +124,8 @@ pub fn read_move(stream: &mut BufReader<TcpStream>) -> (u64, u64, String, String
     let start_pos = algebraic_to_position(move_coords[0..2].to_string());
     let end_pos = algebraic_to_position(move_coords[2..move_coords.len()].to_string());
 
-    return (start_pos, end_pos, promotion_piece, board_state);
+    *message = (start_pos, end_pos, promotion_piece, board_state);
+    return Ok(true);
 }
 
 fn position_to_algebraic(position: u64) -> String {

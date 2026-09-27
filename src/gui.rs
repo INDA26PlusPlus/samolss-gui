@@ -36,6 +36,7 @@ pub struct MainState {
     player_is_white: bool,
     writer: TcpStream,
     reader: BufReader<TcpStream>,
+    current_buffer: Vec<u8>,
 
     board: Board,
     promoting: bool,
@@ -105,6 +106,7 @@ impl MainState {
             player_is_white,
             writer,
             reader,
+            current_buffer: Vec::new(),
         })
     }
     fn draw_board(&mut self, ctx: &mut Context, canvas: &mut graphics::Canvas) {
@@ -230,8 +232,12 @@ impl MainState {
 impl event::EventHandler for MainState {
     fn update(&mut self, _ctx: &mut Context) -> GameResult {
         if self.player_is_white != self.board.white_turn {
-            let (old_position, new_position, promotion_piece, board_state) =
-                read_move(&mut self.reader);
+            let mut message: (u64, u64, String, String) = (0, 0, "".to_string(), "".to_string());
+            if !read_move(&mut self.reader, &mut self.current_buffer, &mut message).unwrap_or(false)
+            {
+                return Ok(());
+            }
+            let (old_position, new_position, promotion_piece, board_state) = message;
 
             println!("received_move: {old_position}, {new_position}, {board_state}");
             let move_is_legal = self.legal_moves[old_position as usize] >> new_position & 1 == 1;
@@ -424,7 +430,8 @@ impl event::EventHandler for MainState {
                     &temp_board,
                 );
 
-                let msg = read_msg(&mut self.reader);
+                while !read_msg(&mut self.reader, &mut self.current_buffer).unwrap_or(false) {}
+                let msg = std::mem::take(&mut self.current_buffer);
 
                 let cleaned_msg = msg.strip_suffix(b"\n").unwrap_or(b"REJECT");
                 match cleaned_msg {
