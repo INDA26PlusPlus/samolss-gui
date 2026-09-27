@@ -5,6 +5,7 @@ use ggez::{
     Context, GameError, GameResult, event,
     glam::*,
     graphics::{self, Color, DrawParam},
+    mint::Point2,
     winit::event::MouseButton,
 };
 use std::cmp;
@@ -28,6 +29,14 @@ const WHITE_SQUARE_COLOR: graphics::Color = graphics::Color {
     b: 208.0 / 255.0,
     a: 1.0,
 };
+
+const LEGAL_MOVE_COLOR: graphics::Color = graphics::Color {
+    r: 111.0 / 255.0,
+    g: 116.0 / 255.0,
+    b: 122.0 / 255.0,
+    a: 0.6,
+};
+
 pub struct MainState {
     square_side: u32,
     board_x: u32,
@@ -132,10 +141,6 @@ impl MainState {
 
             let color = if self.clicked_piece == Some(i) {
                 Color::GREEN
-            } else if self.clicked_piece.is_some()
-                && self.legal_moves[self.clicked_piece.expect("???")] >> i & 1 == 1
-            {
-                Color::RED
             } else if i % 2 == (i / 8 % 2) {
                 WHITE_SQUARE_COLOR
             } else {
@@ -148,6 +153,34 @@ impl MainState {
 
             canvas.draw(&square, Vec2::new(0 as f32, 0 as f32));
 
+            if self.clicked_piece.is_some()
+                && self.legal_moves[self.clicked_piece.expect("???")] >> i & 1 == 1
+            {
+                let circle_center = Point2 {
+                    x: (self.board_x as usize
+                        + self.square_side as usize * (7 - i % 8)
+                        + self.square_side as usize / 2) as f32,
+                    y: if self.player_is_white {
+                        (self.board_y
+                            + self.square_side * (7 - i as u32 / 8)
+                            + self.square_side as u32 / 2) as f32
+                    } else {
+                        (self.board_y
+                            + self.square_side * (i as u32 / 8)
+                            + self.square_side as u32 / 2) as f32
+                    },
+                };
+                let circle = graphics::Mesh::new_circle(
+                    ctx,
+                    graphics::DrawMode::fill(),
+                    circle_center,
+                    self.square_side as f32 / 5.0,
+                    0.1,
+                    LEGAL_MOVE_COLOR,
+                )
+                .expect("Fuuuuuck");
+                canvas.draw(&circle, Vec2::new(0 as f32, 0 as f32));
+            }
             let piece_type = chess_library::Board::piece_type_on_position(&self.board, i);
             if piece_type >= 0 {
                 let x = (self.board_x + self.square_side * (7 - i as u32 % 8)) as f32;
@@ -351,11 +384,45 @@ impl event::EventHandler for MainState {
                 [11, 7, 8, 9]
             };
 
-            let piece_index_clicked = (7 - (x as u32 - popup_x as u32) / (POPUP_W as u32 / 2)
+            let piece_index_clicked = ((x as u32 - popup_x as u32) / (POPUP_W as u32 / 2)
                 + 2 * ((y as u32 - popup_y as u32) / (POPUP_H as u32 / 2)))
                 as usize;
 
             if self.clicked_piece.is_some() {
+                let mut temp_board = self.board.clone();
+
+                let valid_temp_move = chess_library::Board::move_piece(
+                    &mut temp_board,
+                    self.clicked_piece.expect("???"),
+                    self.promoting_square as u64,
+                    Some(promotable_asset[piece_index_clicked] as usize),
+                );
+
+                if valid_temp_move {
+                    send_move(
+                        &mut self.writer,
+                        self.clicked_piece.expect("???"),
+                        self.promoting_square as u64,
+                        Some(promotable_asset[piece_index_clicked] as usize),
+                        &temp_board,
+                    );
+
+                    while !read_msg(&mut self.reader, &mut self.current_buffer).unwrap_or(false) {}
+                    let msg = std::mem::take(&mut self.current_buffer);
+
+                    let cleaned_msg = msg.strip_suffix(b"\n").unwrap_or(b"REJECT");
+                    match cleaned_msg {
+                        b"OK" => {}
+                        b"REJECT" => {
+                            self.clicked_piece = None;
+                            return Ok(());
+                        }
+                        _ => {
+                            self.clicked_piece = None;
+                            return Ok(());
+                        }
+                    }
+                }
                 let valid_move = chess_library::Board::move_piece(
                     &mut self.board,
                     self.clicked_piece.expect("???"),
