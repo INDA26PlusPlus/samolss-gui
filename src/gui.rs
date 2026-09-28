@@ -49,7 +49,7 @@ pub struct MainState {
 
     board: Board,
     promoting: bool,
-    promoting_piece: usize,
+    promoting_piece: Option<usize>,
     piece_assets: [graphics::Image; 12],
     clicked_piece: Option<usize>,
     clicked_square: Option<usize>,
@@ -113,7 +113,7 @@ impl MainState {
             black_win: false,
             draw: false,
             promoting: false,
-            promoting_piece: 64,
+            promoting_piece: None,
             player_is_white,
             writer,
             reader,
@@ -270,37 +270,104 @@ impl MainState {
             }
         }
     }
-}
 
-impl event::EventHandler for MainState {
-    fn update(&mut self, _ctx: &mut Context) -> GameResult {
-        if self.clicked_piece.is_some() && self.clicked_square.is_some() && self.promoting {
-            let promotable_asset = if self.board.white_turn {
-                [5, 1, 2, 3]
-            } else {
-                [11, 7, 8, 9]
-            };
+    fn handle_promotion(&mut self) -> GameResult {
+        let promotable_asset = if self.board.white_turn {
+            [5, 1, 2, 3]
+        } else {
+            [11, 7, 8, 9]
+        };
 
-            let mut temp_board = self.board.clone();
+        let mut temp_board = self.board.clone();
 
-            let clicked_piece = self.clicked_piece.expect("???");
-            let clicked_square = self.clicked_square.expect("???");
+        let clicked_piece = self.clicked_piece.expect("???");
+        let clicked_square = self.clicked_square.expect("???");
+        let promoting_piece = self.promoting_piece.expect("???");
 
-            let valid_temp_move = chess_library::Board::move_piece(
-                &mut temp_board,
-                clicked_piece,
-                clicked_square as u64,
-                Some(promotable_asset[self.promoting_piece] as usize),
-            );
+        let valid_temp_move = chess_library::Board::move_piece(
+            &mut temp_board,
+            clicked_piece,
+            clicked_square as u64,
+            Some(promotable_asset[promoting_piece] as usize),
+        );
 
-            if !valid_temp_move {
+        if !valid_temp_move {
+            self.promoting_piece = None;
+            self.promoting = false;
+            self.clicked_square = None;
+            self.clicked_piece = None;
+            return Ok(());
+        }
+        send_move(
+            &mut self.writer,
+            clicked_piece,
+            clicked_square as u64,
+            Some(promotable_asset[promoting_piece] as usize),
+            &temp_board,
+        );
+
+        while !read_msg(&mut self.reader, &mut self.current_buffer).unwrap_or(false) {}
+        let msg = std::mem::take(&mut self.current_buffer);
+
+        let cleaned_msg = msg.strip_suffix(b"\n").unwrap_or(b"REJECT");
+        match cleaned_msg {
+            b"OK" => {}
+            b"REJECT" => {
+                self.clicked_piece = None;
+                self.clicked_square = None;
+                self.promoting = false;
+                self.promoting_piece = None;
                 return Ok(());
             }
+            _ => {
+                self.clicked_piece = None;
+                self.clicked_square = None;
+                self.promoting = false;
+                self.promoting_piece = None;
+                return Ok(());
+            }
+        }
+        let valid_move = chess_library::Board::move_piece(
+            &mut self.board,
+            clicked_piece,
+            clicked_square as u64,
+            Some(promotable_asset[promoting_piece] as usize),
+        );
+        if valid_move {
+            self.legal_moves = chess_library::Board::get_all_legal_moves(&self.board);
+        }
+        self.clicked_piece = None;
+        self.clicked_square = None;
+        self.promoting = false;
+        self.promoting_piece = None;
+
+        let is_mate_white = chess_library::Board::is_mate_white(&self.board);
+        self.black_win = is_mate_white;
+
+        let is_mate_black = chess_library::Board::is_mate_black(&self.board);
+        self.white_win = is_mate_black;
+
+        return Ok(());
+    }
+
+    fn handle_move(&mut self) -> GameResult {
+        let clicked_piece = self.clicked_piece.expect("???");
+        let clicked_square = self.clicked_square.expect("???");
+        let mut temp_board = self.board.clone();
+
+        let valid_temp_move = chess_library::Board::move_piece(
+            &mut temp_board,
+            clicked_piece,
+            clicked_square as u64,
+            None,
+        );
+
+        if valid_temp_move {
             send_move(
                 &mut self.writer,
                 clicked_piece,
                 clicked_square as u64,
-                Some(promotable_asset[self.promoting_piece] as usize),
+                None,
                 &temp_board,
             );
 
@@ -321,166 +388,118 @@ impl event::EventHandler for MainState {
                     return Ok(());
                 }
             }
-            let valid_move = chess_library::Board::move_piece(
-                &mut self.board,
-                clicked_piece,
-                clicked_square as u64,
-                Some(promotable_asset[self.promoting_piece] as usize),
-            );
-            if valid_move {
-                self.legal_moves = chess_library::Board::get_all_legal_moves(&self.board);
+        }
+
+        let valid_move = chess_library::Board::move_piece(
+            &mut self.board,
+            clicked_piece,
+            clicked_square as u64,
+            None,
+        );
+        if valid_move {
+            self.legal_moves = chess_library::Board::get_all_legal_moves(&self.board);
+        }
+
+        self.clicked_piece = None;
+        self.clicked_square = None;
+
+        let is_mate_white = chess_library::Board::is_mate_white(&self.board);
+        self.black_win = is_mate_white;
+
+        let is_mate_black = chess_library::Board::is_mate_black(&self.board);
+        self.white_win = is_mate_black;
+
+        return Ok(());
+    }
+
+    fn handle_opponent_move(&mut self) -> GameResult {
+        let mut message: (u64, u64, String, String) = (0, 0, "".to_string(), "".to_string());
+        if !read_move(&mut self.reader, &mut self.current_buffer, &mut message).unwrap_or(false) {
+            return Ok(());
+        }
+        let (old_position, new_position, promotion_piece, received_board_state) = message;
+
+        let move_is_legal = self.legal_moves[old_position as usize] >> new_position & 1 == 1;
+        let promotion_piece_int = match promotion_piece.as_str() {
+            "Q" => {
+                if self.board.white_turn {
+                    Some(chess_library::Board::W_QUEENS)
+                } else {
+                    Some(chess_library::Board::B_QUEENS)
+                }
             }
-            self.clicked_piece = None;
-            self.clicked_square = None;
-            self.promoting = false;
-            self.promoting_piece = 64;
-
-            let is_mate_white = chess_library::Board::is_mate_white(&self.board);
-            self.black_win = is_mate_white;
-
-            let is_mate_black = chess_library::Board::is_mate_black(&self.board);
-            self.white_win = is_mate_black;
+            "R" => {
+                if self.board.white_turn {
+                    Some(chess_library::Board::W_ROOKS)
+                } else {
+                    Some(chess_library::Board::B_ROOKS)
+                }
+            }
+            "B" => {
+                if self.board.white_turn {
+                    Some(chess_library::Board::W_BISHOPS)
+                } else {
+                    Some(chess_library::Board::B_BISHOPS)
+                }
+            }
+            "N" => {
+                if self.board.white_turn {
+                    Some(chess_library::Board::W_KNIGHTS)
+                } else {
+                    Some(chess_library::Board::B_KNIGHTS)
+                }
+            }
+            _ => None,
+        };
+        if !move_is_legal {
+            network::send_msg(&mut self.writer, b"REJECT\n");
 
             return Ok(());
         }
 
-        if self.clicked_piece.is_some() && self.clicked_square.is_some() {
-            let clicked_piece = self.clicked_piece.expect("???");
-            let clicked_square = self.clicked_square.expect("???");
-            let mut temp_board = self.board.clone();
+        let mut temp_board = self.board.clone();
+        chess_library::Board::move_piece(
+            &mut temp_board,
+            old_position as usize,
+            new_position,
+            promotion_piece_int,
+        );
 
-            let valid_temp_move = chess_library::Board::move_piece(
-                &mut temp_board,
-                clicked_piece,
-                clicked_square as u64,
-                None,
-            );
-
-            if valid_temp_move {
-                send_move(
-                    &mut self.writer,
-                    clicked_piece,
-                    clicked_square as u64,
-                    None,
-                    &temp_board,
-                );
-
-                while !read_msg(&mut self.reader, &mut self.current_buffer).unwrap_or(false) {}
-                let msg = std::mem::take(&mut self.current_buffer);
-
-                let cleaned_msg = msg.strip_suffix(b"\n").unwrap_or(b"REJECT");
-                match cleaned_msg {
-                    b"OK" => {}
-                    b"REJECT" => {
-                        self.clicked_piece = None;
-                        self.clicked_square = None;
-                        return Ok(());
-                    }
-                    _ => {
-                        self.clicked_piece = None;
-                        self.clicked_square = None;
-                        return Ok(());
-                    }
-                }
-            }
-
-            let valid_move = chess_library::Board::move_piece(
-                &mut self.board,
-                clicked_piece,
-                clicked_square as u64,
-                None,
-            );
-            if valid_move {
-                self.legal_moves = chess_library::Board::get_all_legal_moves(&self.board);
-            }
-
-            self.clicked_piece = None;
-            self.clicked_square = None;
-
-            let is_mate_white = chess_library::Board::is_mate_white(&self.board);
-            self.black_win = is_mate_white;
-
-            let is_mate_black = chess_library::Board::is_mate_black(&self.board);
-            self.white_win = is_mate_black;
-
-            println!("white mate: {is_mate_white}");
-            println!("black mate: {is_mate_black}");
+        let own_board_state = network::board_to_board_state(&temp_board);
+        if own_board_state != received_board_state {
+            network::send_msg(&mut self.writer, b"REJECT\n");
             return Ok(());
+        }
+
+        chess_library::Board::move_piece(
+            &mut self.board,
+            old_position as usize,
+            new_position,
+            promotion_piece_int,
+        );
+        self.legal_moves = chess_library::Board::get_all_legal_moves(&self.board);
+
+        network::send_msg(&mut self.writer, b"OK\n");
+        return Ok(());
+    }
+}
+
+impl event::EventHandler for MainState {
+    fn update(&mut self, _ctx: &mut Context) -> GameResult {
+        if self.clicked_piece.is_some()
+            && self.clicked_square.is_some()
+            && self.promoting
+            && self.promoting_piece.is_some()
+        {
+            return self.handle_promotion();
+        }
+
+        if self.clicked_piece.is_some() && self.clicked_square.is_some() && !self.promoting {
+            return self.handle_move();
         }
 
         if self.player_is_white != self.board.white_turn {
-            let mut message: (u64, u64, String, String) = (0, 0, "".to_string(), "".to_string());
-            if !read_move(&mut self.reader, &mut self.current_buffer, &mut message).unwrap_or(false)
-            {
-                return Ok(());
-            }
-            let (old_position, new_position, promotion_piece, received_board_state) = message;
-
-            println!("received_move: {old_position}, {new_position}, {received_board_state}");
-            let move_is_legal = self.legal_moves[old_position as usize] >> new_position & 1 == 1;
-            println!("received move is legal: {move_is_legal}");
-            let promotion_piece_int = match promotion_piece.as_str() {
-                "Q" => {
-                    if self.board.white_turn {
-                        Some(chess_library::Board::W_QUEENS)
-                    } else {
-                        Some(chess_library::Board::B_QUEENS)
-                    }
-                }
-                "R" => {
-                    if self.board.white_turn {
-                        Some(chess_library::Board::W_ROOKS)
-                    } else {
-                        Some(chess_library::Board::B_ROOKS)
-                    }
-                }
-                "B" => {
-                    if self.board.white_turn {
-                        Some(chess_library::Board::W_BISHOPS)
-                    } else {
-                        Some(chess_library::Board::B_BISHOPS)
-                    }
-                }
-                "N" => {
-                    if self.board.white_turn {
-                        Some(chess_library::Board::W_KNIGHTS)
-                    } else {
-                        Some(chess_library::Board::B_KNIGHTS)
-                    }
-                }
-                _ => None,
-            };
-            if !move_is_legal {
-                println!("Received move is illegal");
-                network::send_msg(&mut self.writer, b"REJECT\n");
-
-                return Ok(());
-            }
-
-            let mut temp_board = self.board.clone();
-            chess_library::Board::move_piece(
-                &mut temp_board,
-                old_position as usize,
-                new_position,
-                promotion_piece_int,
-            );
-
-            let own_board_state = network::board_to_board_state(&temp_board);
-            if own_board_state != received_board_state {
-                network::send_msg(&mut self.writer, b"REJECT\n");
-                return Ok(());
-            }
-
-            chess_library::Board::move_piece(
-                &mut self.board,
-                old_position as usize,
-                new_position,
-                promotion_piece_int,
-            );
-            self.legal_moves = chess_library::Board::get_all_legal_moves(&self.board);
-
-            network::send_msg(&mut self.writer, b"OK\n");
-            return Ok(());
+            return self.handle_opponent_move();
         }
 
         Ok(())
@@ -523,7 +542,7 @@ impl event::EventHandler for MainState {
                 + 2 * ((y as u32 - popup_y as u32) / (POPUP_H as u32 / 2)))
                 as usize;
 
-            self.promoting_piece = piece_index_clicked;
+            self.promoting_piece = Some(piece_index_clicked);
             return Ok(());
         }
 
@@ -569,6 +588,7 @@ impl event::EventHandler for MainState {
             // New square on last or first rank
             if square_index <= 7 || square_index >= 56 {
                 self.promoting = true;
+                self.clicked_square = Some(square_index);
                 return Ok(());
             }
         }
