@@ -124,6 +124,8 @@ pub fn read_move(
     let start_pos = algebraic_to_position(move_coords[0..2].to_string());
     let end_pos = algebraic_to_position(move_coords[2..move_coords.len()].to_string());
 
+    println!("start: {start_pos}");
+    println!("end: {end_pos}");
     *message = (start_pos, end_pos, promotion_piece, board_state);
     return Ok(true);
 }
@@ -133,14 +135,14 @@ fn position_to_algebraic(position: u64) -> String {
     let rank_int = position / 8 + 1;
 
     let file = match file_int {
-        0 => "a",
-        1 => "b",
-        2 => "c",
-        3 => "d",
-        4 => "e",
-        5 => "f",
-        6 => "g",
-        7 => "h",
+        0 => "h",
+        1 => "g",
+        2 => "f",
+        3 => "e",
+        4 => "d",
+        5 => "c",
+        6 => "b",
+        7 => "a",
         _ => unreachable!(),
     };
 
@@ -158,14 +160,14 @@ fn algebraic_to_position(alg: String) -> u64 {
     }
 
     let file_int: u64 = match file.expect("???") {
-        'a' => 0,
-        'b' => 1,
-        'c' => 2,
-        'd' => 3,
-        'e' => 4,
-        'f' => 5,
-        'g' => 6,
-        'h' => 7,
+        'h' => 0,
+        'g' => 1,
+        'f' => 2,
+        'e' => 3,
+        'd' => 4,
+        'c' => 5,
+        'b' => 6,
+        'a' => 7,
         _ => panic!("Bad file for algebraic position gotten"),
     };
     let rank_int = ((rank.expect("???").to_digit(10).expect("Rank is not digit") - 1) * 8) as u64;
@@ -176,7 +178,7 @@ pub fn board_to_board_state(board: &chess_library::Board) -> String {
     let mut board_state: String = "".to_string();
     for i in 0..64 {
         // This becomes a bit unintuitive since the board state should go a8 -> h8 -> a7 -> ... -> h1
-        let piece_type = Board::piece_type_on_position(board, (56 + i % 8 - (i / 8) * 8));
+        let piece_type = Board::piece_type_on_position(board, (63 - i % 8 - (i / 8) * 8));
 
         if piece_type < 0 {
             board_state += " ";

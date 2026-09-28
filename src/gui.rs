@@ -324,6 +324,9 @@ impl event::EventHandler for MainState {
                 );
 
                 if network::board_to_board_state(&temp_board) != board_state {
+                    println!("Board states dont match:");
+                    println!("Received: {board_state}");
+                    println!("Own: {}", network::board_to_board_state(&temp_board));
                     network::send_msg(&mut self.writer, b"REJECT\n");
                     return Ok(());
                 }
@@ -339,7 +342,7 @@ impl event::EventHandler for MainState {
                 network::send_msg(&mut self.writer, b"OK\n");
                 return Ok(());
             }
-
+            println!("Received move is illegal");
             network::send_msg(&mut self.writer, b"REJECT\n");
 
             return Ok(());
