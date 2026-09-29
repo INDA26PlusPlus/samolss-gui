@@ -463,7 +463,14 @@ impl MainState {
 
     fn handle_opponent_move(&mut self) -> GameResult {
         let mut message: (u64, u64, String, String) = (0, 0, "".to_string(), "".to_string());
-        if !read_move(&mut self.reader, &mut self.current_buffer, &mut message).unwrap_or(false) {
+        if !read_move(
+            &mut self.reader,
+            &mut self.writer,
+            &mut self.current_buffer,
+            &mut message,
+        )
+        .unwrap_or(false)
+        {
             return Ok(());
         }
         let (old_position, new_position, promotion_piece, received_board_state) = message;

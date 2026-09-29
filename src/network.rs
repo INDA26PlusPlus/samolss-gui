@@ -104,6 +104,7 @@ pub fn read_is_white(stream: &mut BufReader<TcpStream>) -> bool {
 
 pub fn read_move(
     stream: &mut BufReader<TcpStream>,
+    writer: &mut TcpStream,
     buffer: &mut Vec<u8>,
     message: &mut (u64, u64, String, String),
 ) -> io::Result<(bool)> {
@@ -116,6 +117,11 @@ pub fn read_move(
         String::from_utf8(std::mem::take(buffer)).expect("Failed to parse buffer as utf8");
 
     println!("received move: {msg}");
+
+    if msg.len() != 4 + 1 + 64 + 1 {
+        send_msg(writer, b"REJECT\n");
+        return Ok((false));
+    }
 
     let move_coords = &msg[0..4];
     let promotion_piece = msg[4..5].to_string();
