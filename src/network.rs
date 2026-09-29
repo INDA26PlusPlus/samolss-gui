@@ -113,14 +113,32 @@ pub fn read_move(
     };
 
     println!("buffer = {buffer:?}");
-    let mut msg =
-        String::from_utf8(std::mem::take(buffer)).expect("Failed to parse buffer as utf8");
+    let msg_res = String::from_utf8(std::mem::take(buffer));
+    if msg_res.is_err() {
+        send_msg(writer, b"REJECT\n");
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Invalid input data",
+        ));
+    }
+    let mut msg = msg_res.unwrap();
+
+    if !msg.is_ascii() {
+        send_msg(writer, b"REJECT\n");
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Data is not ascii 🤔",
+        ));
+    }
 
     println!("received move: {msg}");
 
     if msg.len() != 4 + 1 + 64 + 1 {
         send_msg(writer, b"REJECT\n");
-        return Ok((false));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Data is of incorrect length, should be 70 bytes",
+        ));
     }
 
     let move_coords = &msg[0..4];
