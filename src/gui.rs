@@ -37,6 +37,13 @@ const LEGAL_MOVE_COLOR: graphics::Color = graphics::Color {
     a: 0.6,
 };
 
+const CERISE_COLOR: graphics::Color = graphics::Color {
+    r: 222.0 / 255.0,
+    g: 49.0 / 255.0,
+    b: 99.0 / 255.0,
+    a: 1.0,
+};
+
 pub struct MainState {
     square_side: u32,
     board_x: u32,
@@ -209,7 +216,7 @@ impl MainState {
                 h: POPUP_H,
             };
 
-            let color = Color::MAGENTA;
+            let color = CERISE_COLOR;
             let finish_text = if self.white_win {
                 graphics::Text::new("White won!")
             } else if self.black_win {
@@ -238,7 +245,7 @@ impl MainState {
                 h: POPUP_H,
             };
 
-            let color = Color::MAGENTA;
+            let color = CERISE_COLOR;
 
             let promotable_asset = if self.board.white_turn {
                 [5, 1, 2, 3]
@@ -319,6 +326,26 @@ impl MainState {
                 self.promoting_piece = None;
                 return Ok(());
             }
+            b"CHECKMATE" => {
+                self.clicked_piece = None;
+                self.clicked_square = None;
+                self.promoting = false;
+                self.promoting_piece = None;
+                self.white_win = self.player_is_white;
+                self.black_win = !self.player_is_white;
+                self.draw = false;
+                return Ok(());
+            }
+            b"STALEMATE" => {
+                self.clicked_piece = None;
+                self.clicked_square = None;
+                self.promoting = false;
+                self.promoting_piece = None;
+                self.white_win = false;
+                self.black_win = false;
+                self.draw = false;
+                return Ok(());
+            }
             _ => {
                 self.clicked_piece = None;
                 self.clicked_square = None;
@@ -382,6 +409,24 @@ impl MainState {
                     self.clicked_square = None;
                     return Ok(());
                 }
+                b"CHECKMATE" => {
+                    println!("Received checkmate");
+                    self.clicked_piece = None;
+                    self.clicked_square = None;
+                    self.white_win = self.player_is_white;
+                    self.black_win = !self.player_is_white;
+                    self.draw = false;
+                    return Ok(());
+                }
+                b"STALEMATE" => {
+                    println!("Received stalemate");
+                    self.clicked_piece = None;
+                    self.clicked_square = None;
+                    self.white_win = false;
+                    self.black_win = false;
+                    self.draw = true;
+                    return Ok(());
+                }
                 _ => {
                     self.clicked_piece = None;
                     self.clicked_square = None;
@@ -408,6 +453,10 @@ impl MainState {
 
         let is_mate_black = chess_library::Board::is_mate_black(&self.board);
         self.white_win = is_mate_black;
+
+        if !self.white_win && !self.black_win && self.legal_moves.len() == 0 {
+            self.draw = true;
+        }
 
         return Ok(());
     }
@@ -479,8 +528,51 @@ impl MainState {
         );
         self.legal_moves = chess_library::Board::get_all_legal_moves(&self.board);
 
+        let is_mate_white = chess_library::Board::is_mate_white(&self.board);
+        self.black_win = is_mate_white;
+
+        let is_mate_black = chess_library::Board::is_mate_black(&self.board);
+        self.white_win = is_mate_black;
+
+        if (self.player_is_white && self.black_win) || (!self.player_is_white && self.white_win) {
+            network::send_msg(&mut self.writer, b"CHECKMATE\n");
+            self.writer.shutdown(std::net::Shutdown::Both);
+            self.reader.get_ref().shutdown(std::net::Shutdown::Both);
+
+            return Ok(());
+        }
+
+        // Elbjork library doesnt have an easy way to check for draw
+        if (!self.black_win && !self.white_win) && self.draw {
+            self.draw = true;
+            println!("Sending stalemate");
+            network::send_msg(&mut self.writer, b"STALEMATE\n");
+            self.writer.shutdown(std::net::Shutdown::Both);
+            self.reader.get_ref().shutdown(std::net::Shutdown::Both);
+            return Ok(());
+        }
+
         network::send_msg(&mut self.writer, b"OK\n");
         return Ok(());
+    }
+
+    fn coords_to_board_index(&mut self, x: u32, y: u32) -> Option<usize> {
+        let square_x = 7 - (x as u32 - self.board_x) / self.square_side;
+        if square_x > 7 {
+            return None;
+        }
+
+        let square_y = if self.player_is_white {
+            7 - (y as u32 - self.board_y) / self.square_side
+        } else {
+            (y as u32 - self.board_y) / self.square_side
+        };
+        if square_y > 7 {
+            return None;
+        }
+
+        let square_index = square_x as usize + square_y as usize * 8;
+        return Some(square_index);
     }
 }
 
@@ -546,21 +638,11 @@ impl event::EventHandler for MainState {
             return Ok(());
         }
 
-        let square_x = 7 - (x as u32 - self.board_x) / self.square_side;
-        if square_x > 7 {
+        let square_index_option = self.coords_to_board_index(x as u32, y as u32);
+        if square_index_option.is_none() {
             return Ok(());
         }
-
-        let square_y = if self.player_is_white {
-            7 - (y as u32 - self.board_y) / self.square_side
-        } else {
-            (y as u32 - self.board_y) / self.square_side
-        };
-        if square_y > 7 {
-            return Ok(());
-        }
-
-        let square_index = square_x as usize + square_y as usize * 8;
+        let square_index = square_index_option.expect("???");
 
         if !self.clicked_piece.is_some() {
             let piece_type =

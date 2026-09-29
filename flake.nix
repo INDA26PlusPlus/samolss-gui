@@ -136,6 +136,21 @@
       devShells = forAllSystems (
         { pkgs }: {
           default = pkgs.mkShell {
+            buildInputs = [
+              pkgs.alsa-lib.dev
+              pkgs.udev.dev
+              pkgs.xorg.libX11
+              pkgs.xorg.libXrandr
+              pkgs.xorg.libXcursor
+              pkgs.xorg.libxcb
+              pkgs.xorg.libXi
+              pkgs.wayland
+              pkgs.libxkbcommon
+              pkgs.libxkbcommon.dev
+              pkgs.vulkan-loader
+              pkgs.vulkan-tools
+              pkgs.glfw
+            ];
             packages = [
               (pkgs.rustToolchain.override {
                 extensions = [
