@@ -127,8 +127,14 @@ pub fn read_move(
     let promotion_piece = msg[4..5].to_string();
     let board_state = msg[5..msg.len() - 1].to_string();
 
-    let start_pos = algebraic_to_position(move_coords[0..2].to_string());
-    let end_pos = algebraic_to_position(move_coords[2..move_coords.len()].to_string());
+    let start_pos = algebraic_to_position(move_coords[0..2].to_string()).inspect_err(|e| {
+        send_msg(writer, b"REJECT\n");
+    })?;
+
+    let end_pos = algebraic_to_position(move_coords[2..move_coords.len()].to_string())
+        .inspect_err(|e| {
+            send_msg(writer, b"REJECT\n");
+        })?;
 
     println!("start: {start_pos}");
     println!("end: {end_pos}");
@@ -155,14 +161,17 @@ fn position_to_algebraic(position: u64) -> String {
     return format!("{file}{rank_int}");
 }
 
-fn algebraic_to_position(alg: String) -> u64 {
+fn algebraic_to_position(alg: String) -> std::io::Result<u64> {
     let mut coords = alg.chars();
     println!("alg: {:?}", coords);
     let file = coords.next();
     let rank = coords.next();
 
     if file.is_none() || rank.is_none() {
-        panic!("Bad algebraic position gotten");
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Invalid file or rank",
+        ));
     }
 
     let file_int: u64 = match file.expect("???") {
@@ -174,10 +183,26 @@ fn algebraic_to_position(alg: String) -> u64 {
         'c' => 5,
         'b' => 6,
         'a' => 7,
-        _ => panic!("Bad file for algebraic position gotten"),
+        _ => return Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid file")),
     };
-    let rank_int = ((rank.expect("???").to_digit(10).expect("Rank is not digit") - 1) * 8) as u64;
-    return rank_int + file_int;
+
+    let rank_int_ = rank.expect("???").to_digit(10);
+    if rank_int_.is_none() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Provided rank not a number",
+        ));
+    }
+
+    let rank_int = (rank_int_.expect("???") - 1) as u64;
+    if rank_int > 7 || rank_int < 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Rank is outside of board",
+        ));
+    }
+
+    return Ok(rank_int * 8 + file_int);
 }
 
 pub fn board_to_board_state(board: &chess_library::Board) -> String {
