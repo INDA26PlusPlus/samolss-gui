@@ -4,6 +4,7 @@ use std::io;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Write;
+use std::net::IpAddr;
 use std::net::SocketAddr;
 use std::net::TcpListener;
 use std::net::TcpStream;
@@ -19,7 +20,12 @@ pub fn create_stream(
         let (mut stream, addr) = loop {
             let (stream, addr) = listener.accept().expect("Failed to accept connection");
             if accept_only.clone().is_none()
-                || accept_only.clone().expect("???").parse() == Ok(addr)
+                || accept_only
+                    .clone()
+                    .expect("???")
+                    .parse::<IpAddr>()
+                    .expect("Accept only couldnt be parsed")
+                    == addr.ip()
             {
                 break (stream, addr);
             }
