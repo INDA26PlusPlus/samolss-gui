@@ -16,7 +16,7 @@ pub fn create_stream(
     is_white: bool,
 ) -> (TcpStream, BufReader<TcpStream>) {
     if connect_to.is_none() {
-        let listener = TcpListener::bind("127.0.0.1:6767").expect("Could not open listener");
+        let listener = TcpListener::bind("0.0.0.0:6767").expect("Could not open listener");
         let (mut stream, addr) = loop {
             let (stream, addr) = listener.accept().expect("Failed to accept connection");
             if accept_only.clone().is_none()
@@ -171,14 +171,14 @@ fn position_to_algebraic(position: u64) -> String {
     let rank_int = position / 8 + 1;
 
     let file = match file_int {
-        0 => "h",
-        1 => "g",
-        2 => "f",
-        3 => "e",
-        4 => "d",
-        5 => "c",
-        6 => "b",
-        7 => "a",
+        0 => "H",
+        1 => "G",
+        2 => "F",
+        3 => "E",
+        4 => "D",
+        5 => "C",
+        6 => "B",
+        7 => "A",
         _ => unreachable!(),
     };
 
@@ -199,14 +199,14 @@ fn algebraic_to_position(alg: String) -> std::io::Result<u64> {
     }
 
     let file_int: u64 = match file.expect("???") {
-        'h' => 0,
-        'g' => 1,
-        'f' => 2,
-        'e' => 3,
-        'd' => 4,
-        'c' => 5,
-        'b' => 6,
-        'a' => 7,
+        'H' => 0,
+        'G' => 1,
+        'F' => 2,
+        'E' => 3,
+        'D' => 4,
+        'C' => 5,
+        'B' => 6,
+        'A' => 7,
         _ => return Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid file")),
     };
 
