@@ -125,7 +125,7 @@
               cargoLock = {
                 lockFile = ./Cargo.lock;
                 outputHashes = {
-                  "chess_library-0.1.0" = "sha256-BV8iQeMOcPUyORLoklRXO3ymWAOFSLCg9FsdWHsuhwo=";
+                  "chess_library-0.1.0" = "sha256-EDV38RuRSxpXACG9kmmjcWg/EZ+hHV6WIvzJtYtmVTY=";
                 };
               };
               LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath buildInputs;

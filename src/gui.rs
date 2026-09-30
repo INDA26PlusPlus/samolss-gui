@@ -343,7 +343,7 @@ impl MainState {
                 self.promoting_piece = None;
                 self.white_win = false;
                 self.black_win = false;
-                self.draw = false;
+                self.draw = true;
                 return Ok(());
             }
             _ => {
@@ -550,7 +550,12 @@ impl MainState {
         }
 
         // Elbjork library doesnt have an easy way to check for draw
-        if (!self.black_win && !self.white_win) && self.draw {
+        if (!self.black_win && !self.white_win)
+            && chess_library::Board::num_legal_moves_for_current_color(
+                &self.board,
+                self.legal_moves,
+            ) == 0
+        {
             self.draw = true;
             println!("Sending stalemate");
             network::send_msg(&mut self.writer, b"STALEMATE\n");
