@@ -569,13 +569,20 @@ impl MainState {
     }
 
     fn coords_to_board_index(&mut self, x: u32, y: u32) -> Option<usize> {
-        let square_x = 7 - (x as u32 - self.board_x) / self.square_side;
+        // if this fails we have an invalid square x coordinate, and it will return None in the following
+        // if statement.
+        let square_x = (7 as u32)
+            .checked_sub((x as u32 - self.board_x) / self.square_side)
+            .unwrap_or(8);
         if square_x > 7 {
             return None;
         }
 
+        // Same as with square_x
         let square_y = if self.player_is_white {
-            7 - (y as u32 - self.board_y) / self.square_side
+            (7 as u32)
+                .checked_sub((y as u32 - self.board_y) / self.square_side)
+                .unwrap_or(8)
         } else {
             (y as u32 - self.board_y) / self.square_side
         };
@@ -641,6 +648,11 @@ impl event::EventHandler for MainState {
             let screen = _ctx.gfx.drawable_size();
             let popup_x = (screen.0 - POPUP_W) / 2.0;
             let popup_y = (screen.1 - POPUP_H) / 2.0;
+
+            // This means user pressed outside the promotion selector
+            if x < popup_x || x > popup_x + POPUP_W || y < popup_y || x > popup_y + POPUP_H {
+                return Ok(());
+            }
 
             let piece_index_clicked = ((x as u32 - popup_x as u32) / (POPUP_W as u32 / 2)
                 + 2 * ((y as u32 - popup_y as u32) / (POPUP_H as u32 / 2)))
