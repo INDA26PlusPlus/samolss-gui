@@ -416,7 +416,7 @@ impl MainState {
                     self.white_win = self.player_is_white;
                     self.black_win = !self.player_is_white;
                     self.draw = false;
-                    return Ok(());
+                    // return Ok(());
                 }
                 b"STALEMATE" => {
                     println!("Received stalemate");
@@ -425,7 +425,7 @@ impl MainState {
                     self.white_win = false;
                     self.black_win = false;
                     self.draw = true;
-                    return Ok(());
+                    // return Ok(());
                 }
                 _ => {
                     self.clicked_piece = None;
