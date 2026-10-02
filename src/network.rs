@@ -97,10 +97,7 @@ pub fn read_msg(stream: &mut BufReader<TcpStream>, buffer: &mut Vec<u8>) -> io::
 
 pub fn read_is_white(stream: &mut BufReader<TcpStream>) -> bool {
     let mut msg: Vec<u8> = Vec::new();
-    while !read_msg(stream, &mut msg).expect("Something went wrong") {
-        println!("{msg:?}");
-    }
-    println!("{msg:?}");
+    while !read_msg(stream, &mut msg).expect("Something went wrong") {}
     match msg[0] {
         b'W' => true,
         b'B' => false,
@@ -118,7 +115,6 @@ pub fn read_move(
         return Ok(false);
     };
 
-    println!("buffer = {buffer:?}");
     let msg_res = String::from_utf8(std::mem::take(buffer));
     if msg_res.is_err() {
         send_msg(writer, b"REJECT\n");
@@ -136,8 +132,6 @@ pub fn read_move(
             "Data is not ascii 🤔",
         ));
     }
-
-    println!("received move: {msg}");
 
     if msg.len() != 4 + 1 + 64 + 1 {
         send_msg(writer, b"REJECT\n");
@@ -160,8 +154,6 @@ pub fn read_move(
             send_msg(writer, b"REJECT\n");
         })?;
 
-    println!("start: {start_pos}");
-    println!("end: {end_pos}");
     *message = (start_pos, end_pos, promotion_piece, board_state);
     return Ok(true);
 }
@@ -187,7 +179,6 @@ fn position_to_algebraic(position: u64) -> String {
 
 fn algebraic_to_position(alg: String) -> std::io::Result<u64> {
     let mut coords = alg.chars();
-    println!("alg: {:?}", coords);
     let file = coords.next();
     let rank = coords.next();
 

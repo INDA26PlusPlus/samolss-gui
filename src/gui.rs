@@ -410,7 +410,6 @@ impl MainState {
                     return Ok(());
                 }
                 b"CHECKMATE" => {
-                    println!("Received checkmate");
                     self.clicked_piece = None;
                     self.clicked_square = None;
                     self.white_win = self.player_is_white;
@@ -419,7 +418,6 @@ impl MainState {
                     // return Ok(());
                 }
                 b"STALEMATE" => {
-                    println!("Received stalemate");
                     self.clicked_piece = None;
                     self.clicked_square = None;
                     self.white_win = false;
@@ -557,7 +555,6 @@ impl MainState {
             ) == 0
         {
             self.draw = true;
-            println!("Sending stalemate");
             network::send_msg(&mut self.writer, b"STALEMATE\n");
             self.writer.shutdown(std::net::Shutdown::Both);
             self.reader.get_ref().shutdown(std::net::Shutdown::Both);

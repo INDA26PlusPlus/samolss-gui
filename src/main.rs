@@ -66,7 +66,6 @@ fn main() -> GameResult {
     if args.connect_to.is_some() {
         player_is_white = read_is_white(&mut reader);
     }
-    println!("is white: {player_is_white}");
 
     let cb = ggez::ContextBuilder::new("chess", "elbjork-samolss");
     let (mut ctx, event_loop) = cb.build()?;
