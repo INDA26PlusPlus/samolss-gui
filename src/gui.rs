@@ -632,6 +632,14 @@ impl event::EventHandler for MainState {
         x: f32,
         y: f32,
     ) -> Result<(), GameError> {
+        if self.white_win || self.black_win || self.draw {
+            self.clicked_piece = None;
+            self.clicked_square = None;
+            self.promoting = false;
+            self.promoting_piece = None;
+            return Ok(());
+        }
+
         if !matches!(button, MouseButton::Left) {
             return Ok(());
         }
